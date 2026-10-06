@@ -236,6 +236,18 @@ public class MainActivity extends Activity {
         if (list.isEmpty()) throw new IllegalArgumentException("Tabella date ISM non riconosciuta");
         return list;
     }
+    private List<Event> ismBackup() {
+        List<Event> list = new ArrayList<>();
+        list.add(new Event("ISM manifatturiero USA - copia ufficiale 06/10/2026",
+            easternTime(2026, 11, 2, 10, 0), "ISM"));
+        list.add(new Event("ISM servizi USA - copia ufficiale 06/10/2026",
+            easternTime(2026, 11, 4, 10, 0), "ISM"));
+        list.add(new Event("ISM manifatturiero USA - copia ufficiale 06/10/2026",
+            easternTime(2026, 12, 1, 10, 0), "ISM"));
+        list.add(new Event("ISM servizi USA - copia ufficiale 06/10/2026",
+            easternTime(2026, 12, 3, 10, 0), "ISM"));
+        return list;
+    }
     private String encode(List<Event> list) throws Exception {
         JSONArray a = new JSONArray();
         for (Event e : list) {
@@ -286,7 +298,19 @@ public class MainActivity extends Activity {
                     int future = 0; for (Event e : list) if (e.time > System.currentTimeMillis()) future++;
                     report.append(source).append(": aggiornato, ").append(future).append(" eventi futuri.\n");
                 } catch (Exception e) {
-                    report.append(source).append(": errore - ").append(e.getMessage()).append(". Copia precedente conservata.\n");
+                    if (source.equals("ISM") && saved(source).isEmpty()) {
+                        try {
+                            getPreferences(0).edit()
+                                .putString("events_ISM", encode(ismBackup()))
+                                .putString("updated_ISM", "Copia ufficiale verificata 06/10/2026; solo novembre/dicembre 2026")
+                                .apply();
+                        } catch (Exception ignored) { }
+                    }
+                    report.append(source).append(": online non riuscito - ")
+                        .append(e.getMessage()).append(". ")
+                        .append(getPreferences(0).getString("updated_" + source,
+                            "Nessuna copia disponibile"))
+                        .append(". Copia di riserva, da riverificare.\n");
                 }
             }
             String result = report.toString();
