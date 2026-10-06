@@ -183,7 +183,15 @@ public class MainActivity extends Activity {
             }
         });
 
-        text(root, "Segnale XAU/USD: NON DISPONIBILE", 20);
+        Button analysis = new Button(this);
+        analysis.setText("Analizza CPI / NFP e misura il movimento");
+        root.addView(analysis);
+        analysis.setOnClickListener(view -> {
+            Intent intent = new Intent(this, NewsAnalysisActivity.class);
+            intent.putExtra("event_name", selected.getText().toString());
+            startActivity(intent);
+        });
+        text(root, "Analisi disponibile dopo la pubblicazione", 20);
         text(root,
             "Calendario aggiornato all'apertura e periodicamente "
             + "in background. Prezzo esterno aggiornato mentre "
