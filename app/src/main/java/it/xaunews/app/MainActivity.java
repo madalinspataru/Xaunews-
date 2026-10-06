@@ -210,19 +210,30 @@ public class MainActivity extends Activity {
         return list;
     }
     private List<Event> parseIsm(String html) {
-        Document doc = Jsoup.parse(html); doc.select("script, style, sup").remove();
-        String plain = doc.text().replace('\u00a0', ' ');
-        Pattern p = Pattern.compile("(?i)\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(20\\d{2})\\s+(\\d{1,2})(?:\\*+)?\\s+(\\d{1,2})\\b");
-        Matcher match = p.matcher(plain); List<Event> list = new ArrayList<>();
+        Document doc = Jsoup.parse(html);
+        doc.select("script, style, sup").remove();
+        List<Event> list = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        while (match.find()) {
-            int m = month(match.group(1)), y = Integer.parseInt(match.group(2));
+        Pattern heading = Pattern.compile("(?i)^([a-z]+)\\s+(20\\d{2})$");
+        for (Element row : doc.select("table tr")) {
+            List<Element> cells = row.children();
+            if (cells.size() != 3) continue;
+            String title = cells.get(0).text().replace('\u00a0', ' ').trim();
+            Matcher match = heading.matcher(title);
+            if (!match.matches()) continue;
+            int m = month(match.group(1));
+            int y = Integer.parseInt(match.group(2));
             if (!seen.add(y + "-" + m)) continue;
-            int d1 = Integer.parseInt(match.group(3)), d2 = Integer.parseInt(match.group(4));
-            list.add(new Event("ISM manifatturiero USA", easternTime(y, m, d1, 10, 0), "ISM"));
-            list.add(new Event("ISM servizi USA", easternTime(y, m, d2, 10, 0), "ISM"));
+            for (int i = 1; i <= 2; i++) {
+                String dayText = cells.get(i).text().trim();
+                if (!dayText.matches("\\d{1,2}"))
+                    throw new IllegalArgumentException("Giorno ISM non riconosciuto: " + dayText);
+                int day = Integer.parseInt(dayText);
+                list.add(new Event(i == 1 ? "ISM manifatturiero USA" : "ISM servizi USA",
+                    easternTime(y, m, day, 10, 0), "ISM"));
+            }
         }
-        if (list.isEmpty()) throw new IllegalArgumentException("Date ISM non riconosciute");
+        if (list.isEmpty()) throw new IllegalArgumentException("Tabella date ISM non riconosciuta");
         return list;
     }
     private String encode(List<Event> list) throws Exception {
