@@ -16,7 +16,7 @@ import java.util.regex.*;
 
 public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private TextView selected, countdown, status;
+    private TextView selected, countdown, status, alarmStatus;
     private LinearLayout events;
     private Button refresh;
     private long eventTime;
@@ -58,6 +58,7 @@ public class MainActivity extends Activity {
     private void select(String name, long time) {
         eventTime = time; selected.setText(name);
         getPreferences(0).edit().putString("name", name).putLong("time", time).apply();
+        if (alarmStatus != null) alarmStatus.setText(NewsAlarmReceiver.schedule(this));
     }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -72,6 +73,22 @@ public class MainActivity extends Activity {
         selected = text(root, getPreferences(0).getString("name", "Nessun evento"), 22);
         eventTime = getPreferences(0).getLong("time", 0);
         countdown = text(root, "", 22);
+        NewsAlarmReceiver.channel(this);
+        alarmStatus = text(root, "", 15);
+        Button enable = new Button(this);
+        enable.setText("Abilita avvisi 5 minuti prima"); root.addView(enable);
+        enable.setOnClickListener(v -> enableAlerts());
+        Button test = new Button(this);
+        test.setText("Prova avviso tra 1 minuto"); root.addView(test);
+        test.setOnClickListener(v -> alarmStatus.setText(NewsAlarmReceiver.test(this)));
+        Button disable = new Button(this);
+        disable.setText("Disattiva avvisi"); root.addView(disable);
+        disable.setOnClickListener(v -> {
+            getPreferences(0).edit().putBoolean("alerts", false).apply();
+            NewsAlarmReceiver.cancel(this);
+            alarmStatus.setText("Avvisi disattivati");
+        });
+
         refresh = new Button(this); refresh.setText("Aggiorna tutte le news");
         root.addView(refresh); status = text(root, "", 14);
         events = new LinearLayout(this); events.setOrientation(1); root.addView(events);
@@ -93,8 +110,9 @@ public class MainActivity extends Activity {
             }
         });
         text(root, "Segnale XAU/USD: NON DISPONIBILE", 20);
-        text(root, "Solo calendario. AI, consenso, risultati e notifiche non disponibili. "
-            + "Gli orari standard Fed sono da confermare. Countdown a schermo aperto.", 14);
+        text(root, "Solo calendario. AI, consenso e risultati non disponibili. "
+            + "Gli orari standard Fed sono da confermare. Avvisi per il solo evento selezionato. "
+            + "Dopo un arresto forzato riapri l’app. Countdown a schermo aperto.", 14);
     }
     private String fetch(String url) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
@@ -316,6 +334,44 @@ public class MainActivity extends Activity {
             String result = report.toString();
             runOnUiThread(() -> { if (destroyed) return; showSaved(); status.setText(result); refresh.setEnabled(true); });
         }).start();
+    }
+    private void enableAlerts() {
+        getPreferences(0).edit().putBoolean("alerts", true).apply();
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(
+            android.Manifest.permission.POST_NOTIFICATIONS)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 71);
+            return;
+        }
+        if (!NewsAlarmReceiver.notifications(this)) {
+            android.content.Intent i = new android.content.Intent(
+                android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            i.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName());
+            startActivity(i); return;
+        }
+        if (Build.VERSION.SDK_INT >= 31 && !NewsAlarmReceiver.exact(this)) {
+            android.content.Intent i = new android.content.Intent(
+                android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                android.net.Uri.parse("package:" + getPackageName()));
+            try { startActivity(i); }
+            catch (android.content.ActivityNotFoundException e) {
+                alarmStatus.setText("Apri le impostazioni Android: Sveglie e promemoria");
+            }
+            return;
+        }
+        alarmStatus.setText(NewsAlarmReceiver.schedule(this));
+    }
+    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request == 71) {
+            if (results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+                enableAlerts();
+            else alarmStatus.setText("Notifiche non autorizzate. Premi Abilita avvisi per riprovare.");
+        }
+    }
+    @Override public void onResume() {
+        super.onResume();
+        if (alarmStatus != null) alarmStatus.setText(NewsAlarmReceiver.schedule(this));
     }
     @Override public void onStart() { super.onStart(); handler.post(ticker); }
     @Override public void onStop() { handler.removeCallbacks(ticker); super.onStop(); }
