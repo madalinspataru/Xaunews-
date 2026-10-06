@@ -1,0 +1,17 @@
+XAU NEWS — progetto Android, NON un APK
+
+Stato: sorgenti preparati. Compilazione e funzionamento su dispositivo non verificati: questo ambiente non dispone di Android SDK né Gradle.
+
+Funzioni implementate: inserimento manuale di un evento, salvataggio locale, countdown mentre l'app è aperta. Android 8 o successivo.
+Non presenti: calendario reale, prezzi, notifiche, backend, XGBoost addestrato, probabilità BUY/SELL. Non sono usati dati inventati.
+
+Per ottenere l'APK da tablet usando GitHub:
+1. Crea un repository GitHub e carica il contenuto di questa cartella, incluse .github/workflows/android.yml e tutte le sottocartelle. Non caricare soltanto lo ZIP. Il caricamento può richiedere un'app Git o la modalità desktop del browser.
+2. Apri Actions, seleziona 'Compila APK', poi Run workflow.
+3. Se la compilazione riesce, scarica l'artefatto XAU-News-APK ed estrai app-debug.apk.
+4. Apri l'APK sul tablet e autorizza l'installazione da quella sorgente se Android lo richiede.
+La compilazione usa servizi esterni e richiede un account GitHub; verificare eventuali limiti del proprio piano. L'APK usa una firma di debug, adatta a prove personali, non alla pubblicazione.
+
+Alternativa Android Studio: apri questa cartella con SDK 35, JDK 17 e Gradle 8.9; esegui assembleDebug.
+
+Per completare l'app richiesta occorrono un feed autorizzato di calendario e prezzi, dati storici, addestramento e test del modello, e un backend. Nessuna accuratezza è promessa.
