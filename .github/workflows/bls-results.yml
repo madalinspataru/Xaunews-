@@ -1,0 +1,38 @@
+name: Aggiorna risultati BLS
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * *'
+    - cron: '*/10 12-14 * * 1-5'
+permissions:
+  contents: write
+concurrency:
+  group: bls-results
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scarica comunicati ufficiali
+        id: fetch
+        run: python scripts/update_bls.py
+      - name: Salva i risultati aggiornati
+        run: |
+          if [ -f data/bls_latest.json ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add data/bls_latest.json
+            if ! git diff --cached --quiet; then
+              git commit -m 'Aggiorna risultati ufficiali BLS'
+              git push
+            fi
+          fi
+      - name: Segnala eventuali fonti non aggiornate
+        if: steps.fetch.outputs.failed == 'true'
+        run: |
+          echo 'Almeno un comunicato BLS non e stato aggiornato. Controllare Scarica comunicati ufficiali.'
+          exit 1
