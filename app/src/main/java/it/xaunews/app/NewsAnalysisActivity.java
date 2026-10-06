@@ -13,7 +13,14 @@ import java.util.*;
 
 public class NewsAnalysisActivity extends Activity {
     private XauPriceView quotes;
-    private TextView result, tracking;
+    private TextView result, tracking, officialStatus;
+    private boolean visible;
+    private int releaseRequest;
+    private final android.os.Handler officialHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable officialLoop = new Runnable() {
+        public void run() { if (!visible) return; loadOfficial(); officialHandler.postDelayed(this, 60000); }
+    };
+    private boolean releaseFetching;
     private Spinner kind;
     private final List<EditText> expected = new ArrayList<>();
     private final List<EditText> actual = new ArrayList<>();
@@ -47,6 +54,8 @@ public class NewsAnalysisActivity extends Activity {
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
             android.R.layout.simple_spinner_dropdown_item, new String[]{"CPI", "NFP"});
         kind.setAdapter(adapter); root.addView(kind);
+        officialStatus = text(root, "Ultima pubblicazione BLS: caricamento...", 15);
+        button(root, "Aggiorna risultato ufficiale BLS").setOnClickListener(v -> loadOfficial());
         fields = new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); root.addView(fields);
         result = text(root, "", 17);
         kind.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
@@ -85,6 +94,9 @@ public class NewsAnalysisActivity extends Activity {
         }
         result.setText("Usa il consenso della tua fonte, non una previsione di origine sconosciuta. Compila almeno una coppia; per un quadro completo servono tutte le quattro misure.");
         prefs.edit().putInt("kind", type).apply();
+        releaseRequest++;
+        officialStatus.setText("Ultima pubblicazione BLS: attesa del download. Il consenso resta manuale.");
+        loadOfficial();
     }
     private EditText input(String hint, String value) {
         EditText e = new EditText(this); e.setHint(hint); e.setText(value);
@@ -110,7 +122,7 @@ public class NewsAnalysisActivity extends Activity {
                 double delta = number(actual.get(i))-number(expected.get(i));
                 if (type==1 && i==1 && (number(actual.get(i))<0 || number(actual.get(i))>100 || number(expected.get(i))<0 || number(expected.get(i))>100)) throw new IllegalArgumentException();
                 s.append((type==0 ? new String[]{"CPI mensile", "Core CPI mensile", "CPI annuo", "Core CPI annuo"} : new String[]{"NFP", "Disoccupazione", "Salari mensili", "Salari annui"})[i]).append(": ")
-                    .append(String.format(Locale.ITALY, "%+.3f", delta))
+                    .append(String.format(Locale.ITALY, type==1 && i==0 ? "%+.0f" : "%+.3f", delta))
                     .append(type==1 && i==0 ? " mila posti" : " punti percentuali").append(" rispetto alle attese\n");
                 double direction = type==1 && i==1 ? -delta : delta;
                 if (direction>0.000001) stronger++; else if(direction< -0.000001) weaker++;
@@ -124,6 +136,54 @@ public class NewsAnalysisActivity extends Activity {
             result.setText(s.toString());
         } catch (RuntimeException e) { result.setText("Controlla i numeri: ogni misura deve avere sia consenso sia risultato. Usa 0,3 o 0.3; per NFP scrivi 157 per 157.000 posti."); }
     }
+
+    private void loadOfficial() {
+        if (expected.size()!=4 || releaseFetching) return;
+        final int type=kind.getSelectedItemPosition();
+        final int request=releaseRequest;
+        releaseFetching=true;
+        officialStatus.setText("Scarico l'ultima pubblicazione ufficiale BLS...");
+        new Thread(() -> {
+            BlsRelease release=null; String failure=null;
+            try { release=BlsRelease.download(type); }
+            catch(Exception e) { failure=e.getMessage(); }
+            final BlsRelease data=release; final String error=failure;
+            runOnUiThread(() -> {
+                releaseFetching=false;
+                if(isFinishing() || isDestroyed()) return;
+                if(request!=releaseRequest || type!=kind.getSelectedItemPosition()) {
+                    if(visible) loadOfficial(); return;
+                }
+                if(data==null) {
+                    officialStatus.setText("Download BLS non riuscito: "+error+". Nessun nuovo dato importato; eventuali valori visibili restano quelli precedenti.");
+                    return;
+                }
+                if(data.published>System.currentTimeMillis()) {
+                    officialStatus.setText("Comunicato non ancora pubblicato. Nessun risultato importato."); return;
+                }
+                long previous=prefs.getLong(type+"_release",0);
+                SharedPreferences.Editor editor=prefs.edit().putLong(type+"_release",data.published);
+                for(int i=0;i<4;i++) {
+                    String value=String.format(Locale.US, type==1 && i==0 ? "%.0f" : "%.1f",data.values[i]);
+                    actual.get(i).setText(value); editor.putString(type+"_a_"+i,value);
+                    if(previous!=data.published) {expected.get(i).setText("");editor.remove(type+"_e_"+i);}
+                }
+                editor.apply();
+                String date=Instant.ofEpochMilli(data.published).atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm z"));
+                officialStatus.setText("Fonte BLS — periodo: "+data.period+"\nPubblicato: "+date
+                    +"\nQuesti sono gli ultimi risultati gia pubblicati, non quelli della prossima news. Consenso da inserire per questa pubblicazione.");
+                if(previous!=data.published) result.setText("Risultati ufficiali caricati. Inserisci le attese relative al periodo indicato sopra; le attese precedenti sono state svuotate.");
+            });
+        }).start();
+    }
+    @Override public void onStart() {
+        super.onStart(); visible=true; officialHandler.post(officialLoop);
+    }
+    @Override public void onStop() {
+        visible=false; officialHandler.removeCallbacks(officialLoop); super.onStop();
+    }
+
     private void begin() {
         long stamp = quotes.getQuoteTimestamp(); double price = quotes.getQuotePrice();
         long now = System.currentTimeMillis();
