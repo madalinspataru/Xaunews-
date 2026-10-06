@@ -131,31 +131,48 @@ public class MainActivity extends Activity {
     private static class Event {
         String name;
         long time;
-        Event(String n, long t) { name = n; time = t; }
+        Event(String n, long t) {
+            name = n;
+            time = t;
+        }
     }
 
     private long timestamp(String property, String value) {
         if (value.length() < 15)
             throw new IllegalArgumentException("Orario assente");
+
         LocalDateTime dt = LocalDateTime.parse(
             value.substring(0, 15),
             DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss")
                 .withResolverStyle(ResolverStyle.STRICT));
+
         if (value.endsWith("Z"))
             return dt.toInstant(ZoneOffset.UTC).toEpochMilli();
+
         int p = property.indexOf("TZID=");
-        if (p < 0) throw new IllegalArgumentException("Fuso assente");
+        if (p < 0)
+            throw new IllegalArgumentException("Fuso assente");
+
         String zone = property.substring(p + 5)
-            .split(";")[0].replace("\"", "");
+            .split(";")[0].replace("\"", "").trim();
+
+        if (zone.equalsIgnoreCase("US-Eastern")
+            || zone.equalsIgnoreCase("US/Eastern")) {
+            zone = "America/New_York";
+        }
+
         int a = zone.indexOf("America/");
         if (a >= 0) zone = zone.substring(a);
-        return dt.atZone(ZoneId.of(zone)).toInstant().toEpochMilli();
+
+        return dt.atZone(ZoneId.of(zone))
+            .toInstant().toEpochMilli();
     }
 
     private List<Event> parse(String data) {
         if (!data.contains("BEGIN:VCALENDAR")
             || !data.contains("END:VCALENDAR"))
             throw new IllegalArgumentException("Calendario non valido");
+
         String unfolded = data.replace("\r\n", "\n")
             .replaceAll("\n[ \t]", "");
         List<Event> list = new ArrayList<>();
@@ -163,9 +180,12 @@ public class MainActivity extends Activity {
         String name = null;
         long time = 0;
         boolean inside = false;
+
         for (String line : unfolded.split("\n")) {
             if (line.equals("BEGIN:VEVENT")) {
-                inside = true; name = null; time = 0;
+                inside = true;
+                name = null;
+                time = 0;
             } else if (line.equals("END:VEVENT")) {
                 if (name != null && time > System.currentTimeMillis()) {
                     String lower = name.toLowerCase(Locale.US);
@@ -173,6 +193,7 @@ public class MainActivity extends Activity {
                         ? "CPI USA"
                         : lower.contains("employment situation")
                         ? "NFP USA" : null;
+
                     if (label != null && seen.add(label + time))
                         list.add(new Event(label, time));
                 }
@@ -182,12 +203,15 @@ public class MainActivity extends Activity {
                 if (colon < 0) continue;
                 String key = line.substring(0, colon);
                 String value = line.substring(colon + 1);
+
                 if (key.equals("SUMMARY") || key.startsWith("SUMMARY;"))
                     name = value;
+
                 if (key.equals("DTSTART") || key.startsWith("DTSTART;"))
                     time = timestamp(key, value);
             }
         }
+
         list.sort((a, b) -> Long.compare(a.time, b.time));
         return list;
     }
@@ -198,9 +222,11 @@ public class MainActivity extends Activity {
             text(events, "Nessun CPI/NFP futuro trovato nel calendario. "
                 + "Verifica gli orari sul sito BLS.", 15);
         }
+
         DateTimeFormatter format =
             DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")
                 .withZone(ZoneId.systemDefault());
+
         for (Event event : list) {
             Button button = new Button(this);
             button.setText(event.name + " - "
@@ -213,6 +239,7 @@ public class MainActivity extends Activity {
     private void download() {
         refresh.setEnabled(false);
         status.setText("Download calendario BLS...");
+
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
@@ -221,10 +248,12 @@ public class MainActivity extends Activity {
                 ).openConnection();
                 connection.setConnectTimeout(15000);
                 connection.setReadTimeout(15000);
-                connection.setRequestProperty("User-Agent", "XauNews/0.2");
+                connection.setRequestProperty("User-Agent", "XauNews/0.3");
                 connection.setRequestProperty("Accept", "text/calendar");
+
                 int code = connection.getResponseCode();
                 if (code != 200) throw new IOException("HTTP " + code);
+
                 StringBuilder content = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(connection.getInputStream(),
@@ -236,10 +265,12 @@ public class MainActivity extends Activity {
                             throw new IOException("Risposta troppo grande");
                     }
                 }
+
                 String data = content.toString();
                 List<Event> list = parse(data);
                 String updated = ZonedDateTime.now().format(
                     DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm z"));
+
                 runOnUiThread(() -> {
                     if (destroyed) return;
                     getPreferences(0).edit().putString("calendar", data)
