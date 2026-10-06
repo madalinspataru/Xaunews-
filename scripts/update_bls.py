@@ -62,7 +62,11 @@ def update():
     for kind, name in [('CPI', 'cpi'), ('NFP', 'empsit')]:
         url = f'https://www.bls.gov/news.release/{name}.nr0.htm'
         try:
-            with urllib.request.urlopen(url, timeout=30) as response:
+            request = urllib.request.Request(url, headers={
+                'User-Agent': 'XAU-News/0.7.1 (+https://github.com/madalinspataru/Xaunews-)',
+                'Accept': 'text/html',
+            })
+            with urllib.request.urlopen(request, timeout=30) as response:
                 raw = response.read(2000001)
             if len(raw) > 2000000:
                 raise ValueError('Risposta troppo grande')
