@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import urllib.request
+import xml.etree.ElementTree as ET
 from zoneinfo import ZoneInfo
 
 def find(pattern, text):
@@ -55,6 +56,39 @@ def parse(raw, kind, url):
         values = [nfp, unemployment, monthly, annual]
     return {'period': period, 'source': url, 'published': int(published.timestamp()*1000), 'values': values}
 
+def fetch(url):
+    request = urllib.request.Request(url, headers={
+        'User-Agent': 'XAU-News/0.7.1 (+https://github.com/madalinspataru/Xaunews-)',
+        'Accept': 'text/html,application/atom+xml',
+    })
+    with urllib.request.urlopen(request, timeout=30) as response:
+        raw = response.read(2000001)
+    if len(raw) > 2000000:
+        raise ValueError('Risposta troppo grande')
+    return raw
+
+def download_release(kind, name, source):
+    try:
+        return parse(fetch(source).decode('utf-8'), kind, source)
+    except Exception as error:
+        print(kind, 'Comunicato principale non disponibile:', error)
+    feed_url = f'https://www.bls.gov/feed/{name}.rss'
+    feed = ET.fromstring(fetch(feed_url))
+    ns = {'a': 'http://www.w3.org/2005/Atom'}
+    links = []
+    for entry in feed.findall('a:entry', ns):
+        link = entry.find('a:link', ns)
+        if link is not None:
+            url = link.get('href', '')
+            if re.fullmatch(r'https://www\.bls\.gov/news\.release/archives/' + name + r'_\d{8}\.htm', url):
+                links.append(url)
+    if not links:
+        raise ValueError('Archivio ufficiale non trovato nel feed BLS')
+    # Only the newest feed entry: never silently substitute an older release.
+    archive_url = links[0]
+    print(kind, 'Prova archivio ufficiale:', archive_url)
+    return parse(fetch(archive_url).decode('utf-8'), kind, source)
+
 def update():
     output = Path('data/bls_latest.json')
     previous = json.loads(output.read_text()) if output.exists() else {}
@@ -62,15 +96,7 @@ def update():
     for kind, name in [('CPI', 'cpi'), ('NFP', 'empsit')]:
         url = f'https://www.bls.gov/news.release/{name}.nr0.htm'
         try:
-            request = urllib.request.Request(url, headers={
-                'User-Agent': 'XAU-News/0.7.1 (+https://github.com/madalinspataru/Xaunews-)',
-                'Accept': 'text/html',
-            })
-            with urllib.request.urlopen(request, timeout=30) as response:
-                raw = response.read(2000001)
-            if len(raw) > 2000000:
-                raise ValueError('Risposta troppo grande')
-            release = parse(raw.decode('utf-8'), kind, url)
+            release = download_release(kind, name, url)
             if kind in previous and release['published'] < previous[kind]['published']:
                 raise ValueError('Comunicato meno recente della copia salvata')
             updated[kind] = release
