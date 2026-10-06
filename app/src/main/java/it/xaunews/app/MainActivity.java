@@ -5,59 +5,77 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.graphics.Color;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
-import android.widget.Toast;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.ResolverStyle;
-import java.util.Locale;
+import android.widget.*;
+import java.io.*;
+import java.net.*;
+import java.time.*;
+import java.time.format.*;
+import java.util.*;
 
 public class MainActivity extends Activity {
     private final Handler handler =
         new Handler(Looper.getMainLooper());
 
-    private TextView countdown;
-    private TextView saved;
+    private TextView countdown, selected, status;
+    private LinearLayout events;
+    private Button refresh;
     private long eventTime;
+    private boolean destroyed;
+
+    private static final String CALENDAR =
+        "https://www.bls.gov/schedule/news_release/bls.ics";
 
     private final Runnable ticker = new Runnable() {
         @Override
         public void run() {
-            if (eventTime > 0) {
-                long seconds =
-                    (eventTime - System.currentTimeMillis()) / 1000;
+            long seconds =
+                (eventTime - System.currentTimeMillis()) / 1000;
 
-                countdown.setText(seconds <= 0
-                    ? "Orario evento raggiunto"
-                    : String.format(
-                        Locale.ITALY,
-                        "Mancano %d giorni - %02d:%02d:%02d",
-                        seconds / 86400,
-                        (seconds / 3600) % 24,
-                        (seconds / 60) % 60,
-                        seconds % 60));
+            if (eventTime == 0) {
+                countdown.setText("Seleziona o inserisci un evento");
+            } else if (seconds <= 0) {
+                countdown.setText("Orario evento raggiunto");
             } else {
-                countdown.setText("Inserisci il prossimo evento");
+                countdown.setText(String.format(
+                    Locale.ITALY,
+                    "Mancano %d giorni - %02d:%02d:%02d",
+                    seconds / 86400,
+                    (seconds / 3600) % 24,
+                    (seconds / 60) % 60,
+                    seconds % 60));
             }
             handler.postDelayed(this, 1000);
         }
     };
 
     private TextView text(
-        LinearLayout layout, String value, int size
+        LinearLayout parent, String value, int size
     ) {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(Color.WHITE);
         view.setPadding(0, 16, 0, 16);
-        layout.addView(view);
+        parent.addView(view);
         return view;
+    }
+
+    private EditText input(LinearLayout parent, String hint) {
+        EditText view = new EditText(this);
+        view.setTextColor(Color.WHITE);
+        view.setHintTextColor(Color.LTGRAY);
+        view.setHint(hint);
+        parent.addView(view);
+        return view;
+    }
+
+    private void select(String name, long time) {
+        eventTime = time;
+        selected.setText(name);
+        getPreferences(0).edit()
+            .putString("name", name)
+            .putLong("time", time)
+            .apply();
     }
 
     @Override
@@ -73,37 +91,50 @@ public class MainActivity extends Activity {
         setContentView(scroll);
 
         text(root, "XAU NEWS", 30);
-        text(root, "Eventi inseriti manualmente", 18);
+        text(root, "Calendario CPI e NFP - fonte BLS", 18);
         text(root,
-            "Calendario live e modello AI non ancora collegati.",
-            16);
+            "Orari nel fuso del tablet: "
+            + ZoneId.systemDefault(), 14);
 
-        saved = text(root, "", 22);
+        selected = text(root,
+            getPreferences(0).getString("name", "Nessun evento"),
+            22);
+        eventTime = getPreferences(0).getLong("time", 0);
         countdown = text(root, "", 22);
 
-        eventTime = getPreferences(0).getLong("time", 0);
-        saved.setText(getPreferences(0).getString(
-            "name", "Nessun evento"));
+        refresh = new Button(this);
+        refresh.setText("Aggiorna news");
+        root.addView(refresh);
 
-        EditText name = new EditText(this);
-        name.setTextColor(Color.WHITE);
-        name.setHintTextColor(Color.LTGRAY);
-        name.setHint("Nome evento, es. CPI USA");
-        root.addView(name);
-
-        EditText date = new EditText(this);
-        date.setTextColor(Color.WHITE);
-        date.setHintTextColor(Color.LTGRAY);
-        date.setHint("Data e ora: AAAA-MM-GG HH:MM");
-        root.addView(date);
-
-        text(root,
-            "Fuso del tablet: " + ZoneId.systemDefault()
-            + ". Inserisci l'orario in questo fuso.",
+        status = text(root,
+            "Premi Aggiorna news per scaricare il calendario.",
             14);
 
+        events = new LinearLayout(this);
+        events.setOrientation(LinearLayout.VERTICAL);
+        root.addView(events);
+
+        refresh.setOnClickListener(view -> download());
+
+        String cached = getPreferences(0).getString("calendar", "");
+        if (!cached.isEmpty()) {
+            try {
+                showEvents(parse(cached));
+                status.setText("Calendario salvato - ultimo download: "
+                    + getPreferences(0).getString("updated", "")
+                    + ". Premi Aggiorna news per verificarlo.");
+            } catch (Exception error) {
+                status.setText(
+                    "Copia salvata non leggibile. Aggiorna le news.");
+            }
+        }
+
+        text(root, "Inserimento manuale", 20);
+        EditText name = input(root, "Nome evento");
+        EditText date = input(root, "AAAA-MM-GG HH:MM");
+
         Button save = new Button(this);
-        save.setText("Salva evento e avvia countdown");
+        save.setText("Salva evento manuale");
         root.addView(save);
 
         save.setOnClickListener(view -> {
@@ -113,47 +144,72 @@ public class MainActivity extends Activity {
                     throw new IllegalArgumentException();
                 }
 
-                DateTimeFormatter format =
-                    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm")
-                        .withResolverStyle(ResolverStyle.STRICT);
-
                 LocalDateTime time = LocalDateTime.parse(
-                    date.getText().toString().trim(), format);
+                    date.getText().toString().trim(),
+                    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm")
+                        .withResolverStyle(ResolverStyle.STRICT));
 
-                eventTime = time.atZone(ZoneId.systemDefault())
-                    .toInstant().toEpochMilli();
-
-                getPreferences(0).edit()
-                    .putLong("time", eventTime)
-                    .putString("name", label)
-                    .apply();
-
-                saved.setText(label);
+                select(label, time.atZone(ZoneId.systemDefault())
+                    .toInstant().toEpochMilli());
             } catch (Exception error) {
-                Toast.makeText(
-                    this,
-                    "Inserisci nome e data valida: AAAA-MM-GG HH:MM",
-                    Toast.LENGTH_LONG
-                ).show();
+                Toast.makeText(this,
+                    "Inserisci nome e data: AAAA-MM-GG HH:MM",
+                    Toast.LENGTH_LONG).show();
             }
         });
 
         text(root, "Segnale XAU/USD: NON DISPONIBILE", 20);
         text(root,
-            "Countdown attivo a schermo aperto. "
-            + "Notifiche non ancora disponibili.",
-            15);
+            "Questo calendario mostra date e orari, "
+            + "non consenso o valori pubblicati. "
+            + "AI e notifiche non ancora disponibili. "
+            + "Countdown attivo a schermo aperto.",
+            14);
     }
 
-    @Override
-    public void onStart() {
-        super.onStart();
-        handler.post(ticker);
+    private static class Event {
+        String name;
+        long time;
+
+        Event(String name, long time) {
+            this.name = name;
+            this.time = time;
+        }
     }
 
-    @Override
-    public void onStop() {
-        handler.removeCallbacks(ticker);
-        super.onStop();
+    private long parseTime(String property, String value) {
+        if (value.length() < 15) {
+            throw new IllegalArgumentException("Orario assente");
+        }
+
+        LocalDateTime local = LocalDateTime.parse(
+            value.substring(0, 15),
+            DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss")
+                .withResolverStyle(ResolverStyle.STRICT));
+
+        if (value.endsWith("Z")) {
+            return local.toInstant(ZoneOffset.UTC).toEpochMilli();
+        }
+
+        int index = property.indexOf("TZID=");
+        if (index < 0) {
+            throw new IllegalArgumentException("Fuso assente");
+        }
+
+        String zone = property.substring(index + 5)
+            .split(";")[0].replace("\"", "");
+
+        if (zone.startsWith("/")) {
+            int america = zone.indexOf("America/");
+            if (america >= 0) {
+                zone = zone.substring(america);
+            }
+        }
+
+        return local.atZone(ZoneId.of(zone))
+            .toInstant().toEpochMilli();
     }
-}
+
+    private List<Event> parse(String calendar) {
+        if (!calendar.contains("BEGIN:VCALENDAR")
+            ||
