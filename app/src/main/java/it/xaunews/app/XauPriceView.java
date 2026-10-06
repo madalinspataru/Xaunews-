@@ -26,6 +26,17 @@ public class XauPriceView extends LinearLayout {
     private boolean active;
     private boolean fetching;
 
+    public interface QuoteListener { void onQuote(double price, long timestamp); }
+    private QuoteListener listener;
+    public void setQuoteListener(QuoteListener value) { listener = value; }
+    public double getQuotePrice() { return lastPrice; }
+    public long getQuoteTimestamp() { return updatedAt; }
+    public boolean hasFreshQuote() {
+        long age = System.currentTimeMillis() - updatedAt;
+        return failure.isEmpty() && updatedAt > 0 && age >= 0 && age <= 120000
+            && !Double.isNaN(lastPrice);
+    }
+
     private long nextRequest;
     private long updatedAt;
     private String failure = "";
@@ -160,6 +171,8 @@ public class XauPriceView extends LinearLayout {
                     nextRequest =
                         SystemClock.elapsedRealtime() + 30000;
                     render();
+                    if (attached && active && listener != null)
+                        listener.onQuote(value, timestamp);
                 });
             } catch (Exception error) {
                 String message = error.getMessage();
