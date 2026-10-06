@@ -1,0 +1,14 @@
+XAU NEWS 0.7.1 - PROGETTO COMPLETO
+
+Estrarre lo ZIP. Su GitHub, repository Xaunews-, ramo main:
+1. Add file > Upload files.
+2. Trascinare TUTTO il contenuto della cartella Xaunews--main (non la cartella esterna). Includere .github, app, scripts, data e i file Gradle.
+3. Commit changes. Non eliminare prima il repository.
+4. Actions > Aggiorna risultati BLS > Run workflow. Attendere risultato verde.
+5. Actions > workflow Android gia utilizzato > Run workflow.
+6. Scaricare l'APK dagli artefatti e installarlo come aggiornamento.
+7. Aprire Analisi > Aggiorna risultato ufficiale BLS.
+
+La copia JSON inclusa e stata scaricata da BLS durante la preparazione: CPI agosto 2026, NFP settembre 2026. L'app mostra periodo e data effettivi. Il workflow aggiorna la copia; le esecuzioni programmate possono subire ritardi. Il consenso resta manuale; il modello AI non e addestrato.
+
+Sintassi Java e parser verificati. Compilazione APK da verificare con GitHub Actions.
