@@ -1,0 +1,33 @@
+name: Verifica API BLS
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verifica:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verifica accesso API ufficiale
+        shell: python
+        run: |
+          import json, urllib.request
+          url = 'https://api.bls.gov/publicAPI/v1/timeseries/data/'
+          body = json.dumps({'seriesid': ['CES0000000001', 'LNS14000000', 'CES0500000003', 'CUSR0000SA0', 'CUSR0000SA0L1E', 'CUUR0000SA0', 'CUUR0000SA0L1E']}).encode()
+          request = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'XAU-News/0.7.1 (+https://github.com/madalinspataru/Xaunews-)'})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              data = json.load(response)
+          if data.get('status') != 'REQUEST_SUCCEEDED':
+              raise RuntimeError(str(data.get('message', data.get('status'))))
+          series = data['Results']['series']
+          if len(series) != 7:
+              raise RuntimeError('Risposta API incompleta')
+          for item in series:
+              rows = [row for row in item.get('data', []) if row.get('period', '').startswith('M') and row['period'] != 'M13']
+              if not rows:
+                  raise RuntimeError('Serie senza dati: ' + item['seriesID'])
+              latest = max(rows, key=lambda row: (row['year'], row['period']))
+              print(item['seriesID'], latest['year'], latest['period'], latest['value'])
+          print('API BLS raggiungibile; tutte le sette serie disponibili. Test di accesso, nessun risultato dell app modificato.')
