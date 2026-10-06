@@ -5,9 +5,16 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.graphics.Color;
-import android.widget.*;
-import java.time.*;
-import java.time.format.*;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
@@ -29,7 +36,7 @@ public class MainActivity extends Activity {
                     ? "Orario evento raggiunto"
                     : String.format(
                         Locale.ITALY,
-                        "Mancano %d giorni • %02d:%02d:%02d",
+                        "Mancano %d giorni - %02d:%02d:%02d",
                         seconds / 86400,
                         (seconds / 3600) % 24,
                         (seconds / 60) % 60,
@@ -96,3 +103,57 @@ public class MainActivity extends Activity {
             14);
 
         Button save = new Button(this);
+        save.setText("Salva evento e avvia countdown");
+        root.addView(save);
+
+        save.setOnClickListener(view -> {
+            try {
+                String label = name.getText().toString().trim();
+                if (label.isEmpty()) {
+                    throw new IllegalArgumentException();
+                }
+
+                DateTimeFormatter format =
+                    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm")
+                        .withResolverStyle(ResolverStyle.STRICT);
+
+                LocalDateTime time = LocalDateTime.parse(
+                    date.getText().toString().trim(), format);
+
+                eventTime = time.atZone(ZoneId.systemDefault())
+                    .toInstant().toEpochMilli();
+
+                getPreferences(0).edit()
+                    .putLong("time", eventTime)
+                    .putString("name", label)
+                    .apply();
+
+                saved.setText(label);
+            } catch (Exception error) {
+                Toast.makeText(
+                    this,
+                    "Inserisci nome e data valida: AAAA-MM-GG HH:MM",
+                    Toast.LENGTH_LONG
+                ).show();
+            }
+        });
+
+        text(root, "Segnale XAU/USD: NON DISPONIBILE", 20);
+        text(root,
+            "Countdown attivo a schermo aperto. "
+            + "Notifiche non ancora disponibili.",
+            15);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        handler.post(ticker);
+    }
+
+    @Override
+    public void onStop() {
+        handler.removeCallbacks(ticker);
+        super.onStop();
+    }
+}
