@@ -17,9 +17,34 @@ public final class BlsRelease {
     }
     public static BlsRelease download(int type) throws IOException {
         String url= "https://www.bls.gov/news.release/"+(type==0?"cpi":"empsit")+".nr0.htm";
-        Document doc=Jsoup.connect(url).timeout(15000).maxBodySize(2000000)
-            .userAgent("XAU-News/0.7 (official release reader)").get();
-        return parse(doc,type,url);
+        try {
+            Document doc=Jsoup.connect(url).timeout(15000).maxBodySize(2000000).get();
+            return parse(doc,type,url);
+        } catch(IOException directError) {
+            return mirror(type,url);
+        }
+    }
+    private static BlsRelease mirror(int type,String source) throws IOException {
+        String url="https://raw.githubusercontent.com/madalinspataru/Xaunews-/main/data/bls_latest.json";
+        String json=Jsoup.connect(url).ignoreContentType(true).timeout(15000)
+            .maxBodySize(100000).execute().body();
+        try {
+            org.json.JSONObject item=new org.json.JSONObject(json).getJSONObject(type==0?"CPI":"NFP");
+            if(!source.equals(item.getString("source"))) throw new IOException("Fonte BLS inattesa");
+            long published=item.getLong("published");
+            if(published<=0 || published>System.currentTimeMillis()) throw new IOException("Data copia BLS non valida");
+            org.json.JSONArray array=item.getJSONArray("values");
+            if(array.length()!=4) throw new IOException("Copia BLS incompleta");
+            double[] values=new double[4];
+            for(int i=0;i<4;i++) {
+                values[i]=array.getDouble(i);
+                if(Double.isNaN(values[i]) || Double.isInfinite(values[i])) throw new IOException("Valore copia BLS non valido");
+            }
+            if(type==1 && (values[1]<0 || values[1]>100)) throw new IOException("Disoccupazione non valida");
+            String period=item.getString("period");
+            if(!period.matches("[A-Za-z]+ \\d{4}")) throw new IOException("Periodo copia BLS non valido");
+            return new BlsRelease(period+" (copia tramite GitHub)",source,published,values);
+        } catch(org.json.JSONException e) { throw new IOException("Copia BLS non disponibile: esegui Aggiorna risultati BLS su GitHub"); }
     }
     private static String match(String regex,String text) throws IOException {
         Matcher m=Pattern.compile(regex,Pattern.CASE_INSENSITIVE).matcher(text);

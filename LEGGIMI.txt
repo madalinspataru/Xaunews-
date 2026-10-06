@@ -1,17 +1,14 @@
-XAU NEWS — progetto Android, NON un APK
+XAU NEWS 0.7.1 - PROGETTO COMPLETO
 
-Stato: sorgenti preparati. Compilazione e funzionamento su dispositivo non verificati: questo ambiente non dispone di Android SDK né Gradle.
+Estrarre lo ZIP. Su GitHub, repository Xaunews-, ramo main:
+1. Add file > Upload files.
+2. Trascinare TUTTO il contenuto della cartella Xaunews--main (non la cartella esterna). Includere .github, app, scripts, data e i file Gradle.
+3. Commit changes. Non eliminare prima il repository.
+4. Actions > Aggiorna risultati BLS > Run workflow. Attendere risultato verde.
+5. Actions > workflow Android gia utilizzato > Run workflow.
+6. Scaricare l'APK dagli artefatti e installarlo come aggiornamento.
+7. Aprire Analisi > Aggiorna risultato ufficiale BLS.
 
-Funzioni implementate: inserimento manuale di un evento, salvataggio locale, countdown mentre l'app è aperta. Android 8 o successivo.
-Non presenti: calendario reale, prezzi, notifiche, backend, XGBoost addestrato, probabilità BUY/SELL. Non sono usati dati inventati.
+La copia JSON inclusa e stata scaricata da BLS durante la preparazione: CPI agosto 2026, NFP settembre 2026. L'app mostra periodo e data effettivi. Il workflow aggiorna la copia; le esecuzioni programmate possono subire ritardi. Il consenso resta manuale; il modello AI non e addestrato.
 
-Per ottenere l'APK da tablet usando GitHub:
-1. Crea un repository GitHub e carica il contenuto di questa cartella, incluse .github/workflows/android.yml e tutte le sottocartelle. Non caricare soltanto lo ZIP. Il caricamento può richiedere un'app Git o la modalità desktop del browser.
-2. Apri Actions, seleziona 'Compila APK', poi Run workflow.
-3. Se la compilazione riesce, scarica l'artefatto XAU-News-APK ed estrai app-debug.apk.
-4. Apri l'APK sul tablet e autorizza l'installazione da quella sorgente se Android lo richiede.
-La compilazione usa servizi esterni e richiede un account GitHub; verificare eventuali limiti del proprio piano. L'APK usa una firma di debug, adatta a prove personali, non alla pubblicazione.
-
-Alternativa Android Studio: apri questa cartella con SDK 35, JDK 17 e Gradle 8.9; esegui assembleDebug.
-
-Per completare l'app richiesta occorrono un feed autorizzato di calendario e prezzi, dati storici, addestramento e test del modello, e un backend. Nessuna accuratezza è promessa.
+Sintassi Java e parser verificati. Compilazione APK da verificare con GitHub Actions.
