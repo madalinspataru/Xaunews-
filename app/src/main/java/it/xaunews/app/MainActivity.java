@@ -101,6 +101,8 @@ public class MainActivity extends Activity {
         setContentView(scroll);
 
         text(root, "XAU NEWS", 30);
+        root.addView(new XauPriceView(this));
+
         text(root, "Calendario automatico USA", 20);
         text(root,
             "Fuso Android: " + ZoneId.systemDefault(), 14);
@@ -137,7 +139,7 @@ public class MainActivity extends Activity {
         });
 
         refresh = new Button(this);
-        refresh.setText("Aggiorna ora");
+        refresh.setText("Aggiorna calendario ora");
         root.addView(refresh);
         refresh.setOnClickListener(view -> update());
 
@@ -183,12 +185,13 @@ public class MainActivity extends Activity {
 
         text(root, "Segnale XAU/USD: NON DISPONIBILE", 20);
         text(root,
-            "Aggiornamento all'apertura e periodico in background. "
+            "Calendario aggiornato all'apertura e periodicamente "
+            + "in background. Prezzo esterno aggiornato mentre "
+            + "l'app e visibile, con almeno 30 secondi tra richieste. "
             + "Avvisi 5 minuti prima delle news caricate. "
-            + "Eventi simultanei raggruppati. "
             + "ISM puo usare la copia di riserva; "
             + "orari standard Fed da confermare. "
-            + "AI, consenso e risultati non ancora disponibili.",
+            + "Modello AI non ancora addestrato.",
             14);
 
         NewsSyncWorker.install(getApplicationContext());
